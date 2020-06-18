@@ -5,11 +5,14 @@
 #include <sstream>
 using namespace std;
 #endif
+#include <mpi.h>
 #include "dbt.h"
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 static int get_root(int vsize) {
     int r = 1;
@@ -36,7 +39,7 @@ static int get_right_child(int vsize, int vrank, int height, int troot) {
         return vrank + get_root(vsize - troot - 1) + 1;
     } else {
         int v = vrank + (1 << (height - 1));
-        return v < vsize ? v : vsize - 1;
+        return v < vsize ? v : vrank + get_root(vsize - vrank - 1) + 1;
     }
 }
 
@@ -301,9 +304,43 @@ void dbt_init(int size, int rank, int root, dbt_t *dbt) {
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
+    if (0 == rank) {
+        printf("\n\n");fflush(stdout);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 #endif    
     db.is_root = (root == rank);
+    db.max_h = max_h;
     *dbt = db;
+}
+
+void dbt_init_reduce(int size, int rank, int root, dbt_t *dbt) {
+    int i;
+    dbt_t dbt_bcast;
+    dbt_init(size, rank, root, &dbt_bcast);
+    dbt->is_root = dbt_bcast.is_root;
+    dbt->max_h   = dbt_bcast.max_h;
+    dbt->p[0] = dbt_bcast.c[0];
+    dbt->p[1] = dbt_bcast.c[1];
+    dbt->c[0] = dbt_bcast.p[0];
+    dbt->c[1] = dbt_bcast.p[1];
+    dbt->p_t[0] = dbt_bcast.c_t[0];
+    dbt->p_t[1] = dbt_bcast.c_t[1];
+    dbt->c_t[0] = dbt_bcast.p_t[0];
+    dbt->c_t[1] = dbt_bcast.p_t[1];
+    dbt->h[0] = dbt_bcast.max_h+1 - dbt_bcast.h[0];
+    dbt->h[1] = dbt_bcast.max_h+1 - dbt_bcast.h[1];
+
+#if DBG >= 1
+    for (i=0 ; i<size; i++) {
+        if (i == rank) {
+            fflush(stdout);
+            print_dbt(rank-1, *dbt);
+            usleep(1000);
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+#endif    
 }
 
 #ifdef MODE

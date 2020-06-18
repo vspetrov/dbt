@@ -13,7 +13,8 @@ typedef struct double_bin_tree {
     int c[2];
     int c_t[2];
     int h[2];
+    int max_h;
 } dbt_t;
 void dbt_init(int size, int rank, int root, dbt_t *dbt);
-
+void dbt_init_reduce(int size, int rank, int root, dbt_t *dbt);
 #endif
