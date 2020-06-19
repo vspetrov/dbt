@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include "dbt.h"
 
-static void do_bcast(dbt_t db, void *buf, size_t len, int n_frags) {
+void dbt_bcast(dbt_t db, void *buf, size_t len, int n_frags) {
     uint32_t i;
     int n_steps = n_frags*2;
     size_t chunk = len/n_steps;
@@ -82,119 +82,4 @@ static void do_bcast(dbt_t db, void *buf, size_t len, int n_frags) {
 #if DBG > 1
     printf("All done\n");
 #endif
-}
-
-int main (int argc, char **argv) {
-    int rank, size;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    char *var;
-    int root = 0, i;
-    size_t m1 = 1024;
-    size_t m2 = (1<<19);
-
-    int n_frags = -1;
-    var = getenv("DBT_ROOT");
-    if (var) {
-        root = atoi(var);
-    }
-    var = getenv("DBT_M1");
-    if (var) {
-        m1 = atoi(var);
-    }
-    var = getenv("DBT_M2");
-    if (var) {
-        m2 = atoi(var);
-    }
-    var = getenv("DBT_NFRAGS");
-    if (var) {
-        n_frags = atoi(var);
-    }
-    
-    int count1 = m1/sizeof(int);
-    int count2 = m2/sizeof(int);
-    int iters = 1000;
-    int warmup = 100;
-    dbt_t dbt;
-    dbt_init(size, rank, root, &dbt);
-
-    int *buf = calloc(count2, sizeof(int));
-    int do_check = 0;
-
-    var = getenv("DBT_ITERS");
-    if (var) {
-        iters = atoi(var);
-    }
-    var = getenv("DBT_WARMUP");
-    if (var) {
-        warmup = atoi(var);
-    }
-
-    var = getenv("DBT_CHECK");
-    if (var) {
-        do_check = atoi(var);
-    }
-    if (rank == root) {
-        for (i=0; i<count2; i++) {
-            buf[i] = 0xdeadbeef + i;
-        }
-    }
-    int c, j;
-    int status = 0, status_global;
-    int nf;
-    for (c = count1; c<=count2; c*=2) {
-        if (n_frags > 0) {
-            nf = n_frags;
-        } else {
-            size_t fs = 131072;
-            nf = (int)(c*sizeof(int)/fs);
-        }
-        if (nf  < 8) {
-            nf = 8;
-        }
-        for (i=0; i<warmup; i++) {
-            if (rank != root) {
-                memset(buf, 0, c*sizeof(int));
-            }
-            do_bcast(dbt, buf, c*sizeof(int), nf);
-            if (do_check) {
-                if (rank != root) {
-                    for (j=0; j<c; j++) {
-                        if (buf[j] != 0xdeadbeef + j) {
-                            fprintf(stderr, "Error: pos %d value %d expected %d\n", j, buf[j], 0xdeadbeef + j);
-                            status = 1;
-                            break;
-                        }
-                    }
-                }
-                MPI_Allreduce(&status, &status_global, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-                if (status_global > 0) {
-                    goto cleanup;
-                }
-            }
-        }
-        double total = 0;
-        for (i=0; i<iters; i++) {
-            MPI_Barrier(MPI_COMM_WORLD);
-            double t1 = MPI_Wtime();            
-            do_bcast(dbt, buf, c*sizeof(int), nf);
-            total += MPI_Wtime() - t1;
-        }
-        total /= iters;
-        double gmax, gmin, gavg;
-        MPI_Reduce(&total, &gmax, 1 ,MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&total, &gmin, 1 ,MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&total, &gavg, 1 ,MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-        if (0 == rank) {
-            gmax *= 1e6;
-            gmin *= 1e6;
-            gavg *= 1e6/size;
-            printf("%12zd\t%8.1f\t%8.1f\t%8.1f\n",c*sizeof(int), gmax, gmin, gavg);
-        }
-    }
-cleanup:
-    free(buf);
-    MPI_Finalize();
-    return 0;
 }
