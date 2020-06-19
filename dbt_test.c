@@ -117,11 +117,8 @@ int main (int argc, char **argv) {
     sbuf = malloc(count2*sizeof(int));
     rbuf = malloc(count2*sizeof(int));
 
-    if (test == TEST_BCAST) {
-        dbt_init(size, rank, root, &dbt);
-    } else if (test == TEST_REDUCE) {
-        dbt_init_reduce(size, rank, root, &dbt);
-    }
+
+    dbt_init(size, rank, root, &dbt);
 
     for (i=0; i<count2; i++) {
         sbuf[i] = rank + i + 1;

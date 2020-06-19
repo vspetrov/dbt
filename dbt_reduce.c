@@ -49,6 +49,8 @@ void dbt_reduce(dbt_t db, void *sbuf, void *rbuf, size_t len, int n_frags) {
     ptrdiff_t offset;
     static void *tmp = NULL;
     size_t scratch_size = (1<<17);
+
+    int th[2] = {db.max_h +1 - db.h[0], db.max_h +1 - db.h[1]};
     if (scratch_size < chunk) {
         fprintf(stderr,"Scratch too small\n");
         return ;
@@ -80,8 +82,8 @@ void dbt_reduce(dbt_t db, void *sbuf, void *rbuf, size_t len, int n_frags) {
         }
     }
 
-    int r_exp[2] = {n_parents[0]*n_frags, n_parents[1]*n_frags};
-    int s_exp[2] = {n_children[0]*n_frags, n_children[1]*n_frags};
+    int r_exp[2] = {n_children[0]*n_frags, n_children[1]*n_frags};
+    int s_exp[2] = {n_parents[0]*n_frags, n_parents[1]*n_frags};
 
     assert(r_exp[0] == 0 || r_exp[1] == 0 || db.is_root);
     i = 0;
@@ -91,35 +93,35 @@ void dbt_reduce(dbt_t db, void *sbuf, void *rbuf, size_t len, int n_frags) {
            sstep[0] < s_exp[0] || sstep[1] < s_exp[1]) {
         active = 0;
         color = (i) % 2;
-        rtree = db.p_t[color];
-        stree = db.c_t[color];
+        rtree = db.c_t[color];
+        stree = db.p_t[color];
         need_reduce = 0;
-        if ((db.p[color] != -1) && (rstep[rtree] < r_exp[rtree]) && ((i/2) >= (db.h[rtree] - 1))) {
+        if ((db.c[color] != -1) && (rstep[rtree] < r_exp[rtree]) && ((i/2) >= (th[rtree] - 1))) {
             /* offset = rtree*len/2 + rstep[rtree]*chunk; */
-            MPI_Irecv(scratch[color], chunk, MPI_BYTE, db.p[color], 123,
+            MPI_Irecv(scratch[color], chunk, MPI_BYTE, db.c[color], 123,
                       MPI_COMM_WORLD, &reqs[active]);
 #if DBG             > 1
-            printf("Recv from %d, i %d tree %d, color %d\n", db.p[color], i, rtree, color);
+            printf("Recv from %d, i %d tree %d, color %d\n", db.c[color], i, rtree, color);
 #endif
             need_reduce = 1;
             active++;
             /* rstep[rtree]++; */
         }
 
-        if ((db.c[color] != -1) && (sstep[stree] < s_exp[stree]) && ((i/2) >= db.h[stree])) {
-            assert(n_children[stree]  == 1);
+        if ((db.p[color] != -1) && (sstep[stree] < s_exp[stree]) && ((i/2) >= th[stree])) {
+            assert(n_parents[stree]  == 1);
             offset = stree*len/2 + sstep[stree]*chunk;
             void *_sbuf;
-            if (db.h[stree] == 0) {
+            if (th[stree] == 0) {
                 _sbuf = (char*)sbuf + offset;
             } else {
                 _sbuf = scratch[2 + (sstep[stree] % 2)];
             }
-            MPI_Isend(_sbuf, chunk, MPI_BYTE, db.c[color], 123,
+            MPI_Isend(_sbuf, chunk, MPI_BYTE, db.p[color], 123,
                       MPI_COMM_WORLD, &reqs[active]);
 #if DBG            > 1
             printf("Send to %d, soffset %d i %d tree %d, v[0] = %d, scratch_id %d\n",
-                   db.c[color], offset, i, stree, ((int*)_sbuf)[0], 2 + sstep[stree] % 2);
+                   db.p[color], offset, i, stree, ((int*)_sbuf)[0], 2 + sstep[stree] % 2);
 #endif            
             active++;
             sstep[stree]++;
@@ -133,7 +135,7 @@ void dbt_reduce(dbt_t db, void *sbuf, void *rbuf, size_t len, int n_frags) {
         }
         if (need_reduce) {
             void *_s1, *_s2, *_s3, *_t;
-            offset = rtree*len/2 + (rstep[rtree]/n_parents[rtree])*chunk;
+            offset = rtree*len/2 + (rstep[rtree]/n_children[rtree])*chunk;
             
             if (db.is_root) {
                 _s1 = (char*)sbuf + offset;
@@ -142,12 +144,12 @@ void dbt_reduce(dbt_t db, void *sbuf, void *rbuf, size_t len, int n_frags) {
                 do_op(_s1, _s2, _t, chunk);                
             } else {
                 nrecv++;
-                if (nrecv == n_parents[rtree]) {
-                    assert(n_parents[rtree]  >= 0);
+                if (nrecv == n_children[rtree]) {
+                    assert(n_children[rtree]  >= 0);
 
                     int scratch_id = -1;
 
-                    scratch_id = 2 + ((rstep[rtree] / n_parents[rtree]) % 2);
+                    scratch_id = 2 + ((rstep[rtree] / n_children[rtree]) % 2);
                     _t = scratch[scratch_id];
                     _s2 = scratch[color];
                     _s1 = (void*)((char*)sbuf + offset);
