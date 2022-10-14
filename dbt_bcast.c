@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "dbt.h"
 
+
 void dbt_bcast(dbt_t db, void *buf, size_t len, int n_frags) {
     uint32_t i;
     int n_steps = n_frags*2;
@@ -19,6 +20,7 @@ void dbt_bcast(dbt_t db, void *buf, size_t len, int n_frags) {
     uint32_t color;
     int stree, rtree;
     ptrdiff_t offset;
+
 #if DBG > 1
     if (db.is_root) {
         printf("Bcast, len %zd, frags %d, steps %d, chunk %zd\n", len, n_frags, n_steps, chunk);

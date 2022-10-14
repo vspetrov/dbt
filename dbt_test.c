@@ -42,7 +42,6 @@ static int check_reduce(int *buf, int count, int is_root, int size) {
                 break;
             }
         }
-        
     }
     return status;
 }
@@ -143,6 +142,8 @@ int main (int argc, char **argv) {
                 dbt_bcast(dbt, dbt.is_root ? sbuf : rbuf, c*sizeof(int), nf );
             } else if (test == TEST_REDUCE) {
                 dbt_reduce(dbt, sbuf, rbuf, c*sizeof(int), nf);
+            } else if (test == TEST_ALLREDUCE) {
+                dbt_allreduce(dbt, sbuf, rbuf, c*sizeof(int), nf);
             }
             
             if (do_check) {
@@ -150,6 +151,8 @@ int main (int argc, char **argv) {
                     status = check_bcast(rbuf, c, dbt.is_root, root);
                 } else if (test == TEST_REDUCE) {
                     status = check_reduce(rbuf, c, dbt.is_root, size);
+                } else if (test == TEST_ALLREDUCE) {
+                    status = check_reduce(rbuf, c, 1, size);
                 }
                 MPI_Allreduce(&status, &status_global, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
                 if (status_global > 0) {
@@ -165,6 +168,8 @@ int main (int argc, char **argv) {
                 dbt_bcast(dbt, dbt.is_root ? sbuf : rbuf, c*sizeof(int), nf );
             } else if (test == TEST_REDUCE) {
                 dbt_reduce(dbt, sbuf, rbuf, c*sizeof(int), nf);
+            } else if (test == TEST_ALLREDUCE) {
+                dbt_allreduce(dbt, sbuf, rbuf, c*sizeof(int), nf);
             }
             total += MPI_Wtime() - t1;
         }

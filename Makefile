@@ -1,9 +1,9 @@
-SOURCES := dbt_bcast.c dbt_reduce.c dbt_test.c dbt_compute.c
+SOURCES := dbt_allreduce.c dbt_bcast.c dbt_reduce.c dbt_test.c dbt_compute.c
 
 OBJS := $(SOURCES:.c=.o)
 CC=mpicc
-CFLAGS=-g -O0
-# CFLAGS=-O3 -fopenmp
+# CFLAGS=-g -O0
+CFLAGS=-O3 -fopenmp
 
 all: dbt
 
